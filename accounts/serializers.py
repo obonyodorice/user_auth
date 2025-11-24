@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from .models import User, EmailVerificationToken, PasswordResetToken
+from .models import User, PasswordResetToken
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -23,8 +23,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'email', 'password', 'password_confirm',
-            'first_name', 'last_name', 'phone_number',
-            'date_of_birth'
+            'first_name', 'last_name',
+        
         ]
         extra_kwargs = {
             'first_name': {'required': True},
@@ -113,12 +113,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name',
-            'phone_number', 'date_of_birth', 'profile_picture', 'bio',
-            'email_verified', 'phone_verified', 'is_active',
+            'email_verified', 'is_active',
             'created_at', 'last_login'
         ]
         read_only_fields = [
-            'id', 'email', 'email_verified', 'phone_verified',
+            'id', 'email', 'email_verified',
             'is_active', 'created_at', 'last_login'
         ]
 
@@ -220,22 +219,6 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return attrs
 
 
-class EmailVerificationSerializer(serializers.Serializer):
-    """Serializer for email verification"""
-    
-    token = serializers.CharField(required=True)
-    
-    def validate_token(self, value):
-        """Validate verification token"""
-        try:
-            token = EmailVerificationToken.objects.get(token=value)
-            if not token.is_valid():
-                raise serializers.ValidationError("Invalid or expired token.")
-            return token
-        except EmailVerificationToken.DoesNotExist:
-            raise serializers.ValidationError("Invalid token.")
-
-
 class UserUpdateSerializer(serializers.ModelSerializer):
     """Serializer for updating user profile"""
     
@@ -243,7 +226,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'first_name', 'last_name', 'phone_number',
-            'date_of_birth', 'profile_picture', 'bio'
+             'profile_picture', 'bio'
         ]
     
     def validate_phone_number(self, value):
