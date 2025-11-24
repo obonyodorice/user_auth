@@ -8,7 +8,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
 
-from .models import User, EmailVerificationToken, PasswordResetToken, LoginHistory
+from .models import User, PasswordResetToken
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -16,7 +16,6 @@ from .serializers import (
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
-    EmailVerificationSerializer,
     UserUpdateSerializer
 )
 
@@ -97,13 +96,6 @@ class UserRegistrationView(APIView):
         if serializer.is_valid():
             with transaction.atomic():
                 user = serializer.save()
-                
-                token = EmailVerificationToken.generate_token(user)
-               
-                try:
-                    send_verification_email(user, token)
-                except Exception as e:
-                    print(f"Error sending verification email: {e}")
               
                 auth_token, _ = Token.objects.get_or_create(user=user)
                 
@@ -130,13 +122,6 @@ class UserLoginView(APIView):
             user.last_login = timezone.now()
             user.last_login_ip = get_client_ip(request)
             user.save()
-
-            LoginHistory.objects.create(
-                user=user,
-                ip_address=get_client_ip(request),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                success=True
-            )
          
             login(request, user)
           
@@ -151,44 +136,11 @@ class UserLoginView(APIView):
         email = request.data.get('email', '').lower()
         try:
             user = User.objects.get(email=email)
-            LoginHistory.objects.create(
-                user=user,
-                ip_address=get_client_ip(request),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                success=False
-            )
+
         except User.DoesNotExist:
             pass
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class UserLogoutView(APIView):
-
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def post(self, request):
-    
-        latest_login = LoginHistory.objects.filter(
-            user=request.user,
-            logout_time__isnull=True,
-            success=True
-        ).first()
-        
-        if latest_login:
-            latest_login.logout_time = timezone.now()
-            latest_login.save()
-
-        try:
-            request.user.auth_token.delete()
-        except Exception:
-            pass
-
-        logout(request)
-        
-        return Response({
-            'message': 'Logout successful!'
-        }, status=status.HTTP_200_OK)
 
 
 class ChangePasswordView(APIView):
@@ -298,65 +250,6 @@ class PasswordResetConfirmView(APIView):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-class EmailVerificationView(APIView):
-
-    permission_classes = [permissions.AllowAny]
-    
-    def post(self, request):
-        serializer = EmailVerificationSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            token = serializer.validated_data['token']
-            user = token.user
- 
-            user.email_verified = True
-            user.save()
-
-            token.mark_as_used()
-
-            try:
-                send_mail(
-                    'Welcome! Email Verified',
-                    f'Hello {user.first_name},\n\nYour email has been verified successfully!\n\n'
-                    f'You now have full access to your account.',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=False,
-                )
-            except Exception as e:
-                print(f"Error sending welcome email: {e}")
-            
-            return Response({
-                'message': 'Email verified successfully!'
-            }, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class ResendVerificationEmailView(APIView):
-
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def post(self, request):
-        user = request.user
-        
-        if user.email_verified:
-            return Response({
-                'message': 'Email is already verified.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        token = EmailVerificationToken.generate_token(user)
-    
-        try:
-            send_verification_email(user, token)
-            return Response({
-                'message': 'Verification email sent successfully!'
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({
-                'error': 'Failed to send verification email. Please try again later.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserDetailView(APIView):
