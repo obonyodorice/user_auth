@@ -2,7 +2,6 @@
 from django.contrib.auth.models import BaseUserManager
 
 class CustomUserManager(BaseUserManager):
-    """Custom user manager for email-based authentication"""
     
     def create_user(self, email, password=None, **extra_fields):
         if not email:
