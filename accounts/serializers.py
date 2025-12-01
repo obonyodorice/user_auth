@@ -213,16 +213,5 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'first_name', 'last_name', 'phone_number',
-             'profile_picture', 'bio'
+            'first_name', 'last_name'
         ]
-    
-    def validate_phone_number(self, value):
-        """Validate phone number uniqueness if provided"""
-        if value and User.objects.filter(
-            phone_number=value
-        ).exclude(
-            id=self.instance.id
-        ).exists():
-            raise serializers.ValidationError("This phone number is already in use.")
-        return value
