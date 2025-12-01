@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
+from datetime import timedelta
 
 from .models import User, PasswordResetToken
 from .serializers import (
@@ -18,10 +19,10 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     UserUpdateSerializer
 )
+from .throttling import PasswordResetRateThrottle
 
 
 def get_client_ip(request):
-
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
@@ -30,36 +31,34 @@ def get_client_ip(request):
     return ip
 
 
-def send_verification_email(user, token):
-
-    verification_url = f"{settings.FRONTEND_URL}/verify-email/{token.token}"
-    subject = "Verify Your Email Address"
-    message = f"""
-    Hello {user.first_name},
+# def send_verification_email(user, token):
+#     verification_url = f"{settings.FRONTEND_URL}/verify-email/{token.token}"
+#     subject = "Verify Your Email Address"
+#     message = f"""
+#     Hello {user.first_name},
     
-    Thank you for registering! Please verify your email address by clicking the link below:
+#     Thank you for registering! Please verify your email address by clicking the link below:
     
-    {verification_url}
+#     {verification_url}
     
-    This link will expire in 24 hours.
+#     This link will expire in 24 hours.
     
-    If you didn't register for this account, please ignore this email.
+#     If you didn't register for this account, please ignore this email.
     
-    Best regards,
-    The Team
-    """
+#     Best regards,
+#     The Team
+#     """
     
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=False,
-    )
+#     send_mail(
+#         subject,
+#         message,
+#         settings.DEFAULT_FROM_EMAIL,
+#         [user.email],
+#         fail_silently=False,
+#     )
 
 
 def send_password_reset_email(user, token):
-
     reset_url = f"{settings.FRONTEND_URL}/reset-password/{token.token}"
     subject = "Password Reset Request"
     message = f"""
@@ -87,7 +86,6 @@ def send_password_reset_email(user, token):
 
 
 class UserRegistrationView(APIView):
-
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
@@ -96,11 +94,10 @@ class UserRegistrationView(APIView):
         if serializer.is_valid():
             with transaction.atomic():
                 user = serializer.save()
-              
                 auth_token, _ = Token.objects.get_or_create(user=user)
                 
                 return Response({
-                    'message': 'Registration successful! Please check your email to verify your account.',
+                    'message': 'Registration successful!',
                     'user': UserSerializer(user).data,
                     'token': auth_token.key
                 }, status=status.HTTP_201_CREATED)
@@ -109,7 +106,6 @@ class UserRegistrationView(APIView):
 
 
 class UserLoginView(APIView):
-
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
@@ -120,11 +116,9 @@ class UserLoginView(APIView):
             user.reset_failed_attempts()
             
             user.last_login = timezone.now()
-            user.last_login_ip = get_client_ip(request)
             user.save()
-         
+            
             login(request, user)
-          
             token, _ = Token.objects.get_or_create(user=user)
             
             return Response({
@@ -136,7 +130,6 @@ class UserLoginView(APIView):
         email = request.data.get('email', '').lower()
         try:
             user = User.objects.get(email=email)
-
         except User.DoesNotExist:
             pass
         
@@ -144,7 +137,6 @@ class UserLoginView(APIView):
 
 
 class ChangePasswordView(APIView):
-
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
@@ -182,8 +174,11 @@ class ChangePasswordView(APIView):
 
 
 class PasswordResetRequestView(APIView):
-
+    """
+    Handle password reset requests with throttling and cooldown period.
+    """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordResetRateThrottle]
     
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -193,7 +188,20 @@ class PasswordResetRequestView(APIView):
             
             try:
                 user = User.objects.get(email=email)
-
+                
+                # Check for recent password reset requests (within last 5 minutes)
+                recent_token = PasswordResetToken.objects.filter(
+                    user=user,
+                    created_at__gte=timezone.now() - timedelta(minutes=5)
+                ).first()
+                
+                if recent_token:
+                    time_left = 5 - (timezone.now() - recent_token.created_at).total_seconds() / 60
+                    return Response({
+                        'message': f'A password reset email was recently sent. Please wait {int(time_left)} minute(s) before requesting another.'
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+                
+                # Generate new token
                 token = PasswordResetToken.generate_token(
                     user,
                     ip_address=get_client_ip(request)
@@ -215,7 +223,6 @@ class PasswordResetRequestView(APIView):
 
 
 class PasswordResetConfirmView(APIView):
-
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
@@ -251,9 +258,7 @@ class PasswordResetConfirmView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class UserDetailView(APIView):
-
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
@@ -278,7 +283,6 @@ class UserDetailView(APIView):
 
 
 class DeleteAccountView(APIView):
-
     permission_classes = [permissions.IsAuthenticated]
     
     def delete(self, request):
@@ -299,7 +303,6 @@ class DeleteAccountView(APIView):
 
 
 class UserListView(APIView):
-
     permission_classes = [permissions.IsAdminUser]
     
     def get(self, request):
