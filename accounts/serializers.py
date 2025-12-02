@@ -208,10 +208,10 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return attrs
 
 
-class UserUpdateSerializer(serializers.ModelSerializer):
+# class UserUpdateSerializer(serializers.ModelSerializer):
     
-    class Meta:
-        model = User
-        fields = [
-            'first_name', 'last_name'
-        ]
+#     class Meta:
+#         model = User
+#         fields = [
+#             'first_name', 'last_name'
+#         ]
