@@ -17,7 +17,7 @@ from .serializers import (
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
-    UserUpdateSerializer
+    # UserUpdateSerializer
 )
 from .throttling import PasswordResetRateThrottle
 
@@ -258,28 +258,28 @@ class PasswordResetConfirmView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserDetailView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+# class UserDetailView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
     
-    def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+#     def get(self, request):
+#         serializer = UserSerializer(request.user)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    def put(self, request):
-        serializer = UserUpdateSerializer(
-            request.user,
-            data=request.data,
-            partial=True
-        )
+#     def put(self, request):
+#         serializer = UserUpdateSerializer(
+#             request.user,
+#             data=request.data,
+#             partial=True
+#         )
         
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                'message': 'Profile updated successfully!',
-                'user': UserSerializer(request.user).data
-            }, status=status.HTTP_200_OK)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response({
+#                 'message': 'Profile updated successfully!',
+#                 'user': UserSerializer(request.user).data
+#             }, status=status.HTTP_200_OK)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DeleteAccountView(APIView):
